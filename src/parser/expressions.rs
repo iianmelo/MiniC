@@ -27,11 +27,22 @@ pub fn parse_call(input: &str) -> IResult<&str, (String, Vec<Expr>)> {
     Ok((rest, (name.to_string(), args)))
 }
 
-/// Primary: literal, call, identifier, or parenthesized expression.
-fn primary(input: &str) -> IResult<&str, Expr> {
+/// Atom: literal, call, array literal, identifier, or parenthesized expression.
+fn atom(input: &str) -> IResult<&str, Expr> {
     alt((
         map(literal, |l| Expr::Literal(l.into())),
         map(parse_call, |(name, args)| Expr::Call { name, args }),
+        map(
+            delimited(
+                preceded(multispace0, char('[')),
+                separated_list0(
+                    preceded(multispace0, tag(",")),
+                    preceded(multispace0, expression),
+                ),
+                preceded(multispace0, char(']')),
+            ),
+            Expr::ArrayLit,
+        ),
         map(identifier, |s: &str| Expr::Ident(s.to_string())),
         delimited(
             preceded(multispace0, char('(')),
@@ -39,6 +50,29 @@ fn primary(input: &str) -> IResult<&str, Expr> {
             preceded(multispace0, char(')')),
         ),
     ))(input)
+}
+
+/// Primary: atom with zero or more index postfixes `[ expr ]`.
+fn primary(input: &str) -> IResult<&str, Expr> {
+    let (mut rest, mut acc) = atom(input)?;
+    loop {
+        let index_parse = delimited(
+            preceded(multispace0, char('[')),
+            preceded(multispace0, expression),
+            preceded(multispace0, char(']')),
+        )(rest);
+        match index_parse {
+            Ok((r, index)) => {
+                acc = Expr::Index {
+                    base: Box::new(acc),
+                    index: Box::new(index),
+                };
+                rest = r;
+            }
+            Err(_) => break,
+        }
+    }
+    Ok((rest, acc))
 }
 
 /// Unary: optional unary `-` applied to primary.

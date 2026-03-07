@@ -34,6 +34,13 @@ pub enum Expr {
         name: String,
         args: Vec<Expr>,
     },
+    /// Array literal: [ expr, expr, ... ]
+    ArrayLit(Vec<Expr>),
+    /// Index expression: base[index]
+    Index {
+        base: Box<Expr>,
+        index: Box<Expr>,
+    },
 }
 
 /// A function declaration.
@@ -48,7 +55,7 @@ pub struct FunDecl {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     Assign {
-        target: String,
+        target: Box<Expr>,
         value: Box<Expr>,
     },
     /// Block of statements: `{ stmt ; stmt ; ... }`

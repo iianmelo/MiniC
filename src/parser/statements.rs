@@ -1,6 +1,6 @@
 //! Statement parsers for MiniC.
 
-use crate::ir::ast::Stmt;
+use crate::ir::ast::{Expr, Stmt};
 use crate::parser::expressions::{expression, parse_call};
 use crate::parser::identifiers::identifier;
 use nom::{
@@ -85,16 +85,40 @@ fn while_statement(input: &str) -> IResult<&str, Stmt> {
     ))
 }
 
-/// Parse an assignment statement: `identifier = expression`.
+/// Parse an lvalue: identifier followed by zero or more `[ expr ]` suffixes.
+fn lvalue(input: &str) -> IResult<&str, Expr> {
+    let (mut rest, id) = preceded(multispace0, identifier)(input)?;
+    let mut acc: Expr = Expr::Ident(id.to_string());
+    loop {
+        let index_parse = delimited(
+            preceded(multispace0, char('[')),
+            preceded(multispace0, expression),
+            preceded(multispace0, char(']')),
+        )(rest);
+        match index_parse {
+            Ok((r, index)) => {
+                acc = Expr::Index {
+                    base: Box::new(acc),
+                    index: Box::new(index),
+                };
+                rest = r;
+            }
+            Err(_) => break,
+        }
+    }
+    Ok((rest, acc))
+}
+
+/// Parse an assignment statement: `lvalue = expression`.
 pub fn assignment(input: &str) -> IResult<&str, Stmt> {
     map(
         tuple((
-            preceded(multispace0, identifier),
+            lvalue,
             preceded(multispace0, nom::bytes::complete::tag("=")),
             preceded(multispace0, expression),
         )),
         |(target, _, value)| Stmt::Assign {
-            target: target.to_string(),
+            target: Box::new(target),
             value: Box::new(value),
         },
     )(input)

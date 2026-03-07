@@ -2,7 +2,7 @@
 
 use nom::combinator::all_consuming;
 use std::path::Path;
-use MiniC::ir::ast::{Program, Stmt};
+use MiniC::ir::ast::{Expr, Program, Stmt};
 use MiniC::parser::program;
 
 fn fixtures_dir() -> std::path::PathBuf {
@@ -33,8 +33,8 @@ fn test_parse_statements_only() {
         parse_program_file("statements_only.minic").expect("statements-only program should parse");
     assert!(prog.functions.is_empty());
     assert_eq!(prog.body.len(), 2);
-    assert!(matches!(prog.body[0], Stmt::Assign { ref target, .. } if target == "x"));
-    assert!(matches!(prog.body[1], Stmt::Assign { ref target, .. } if target == "y"));
+    assert!(matches!(prog.body[0], Stmt::Assign { ref target, .. } if matches!(target.as_ref(), Expr::Ident(s) if s == "x")));
+    assert!(matches!(prog.body[1], Stmt::Assign { ref target, .. } if matches!(target.as_ref(), Expr::Ident(s) if s == "y")));
 }
 
 #[test]
@@ -45,7 +45,7 @@ fn test_parse_function_single() {
     assert_eq!(prog.functions[0].name, "foo");
     assert!(prog.functions[0].params.is_empty());
     assert!(
-        matches!(prog.functions[0].body.as_ref(), Stmt::Assign { ref target, .. } if target == "x")
+        matches!(prog.functions[0].body.as_ref(), Stmt::Assign { ref target, .. } if matches!(target.as_ref(), Expr::Ident(s) if s == "x"))
     );
     assert!(prog.body.is_empty());
 }
@@ -68,7 +68,7 @@ fn test_parse_full_program() {
     assert_eq!(prog.functions[1].name, "main");
     assert_eq!(prog.body.len(), 2);
     assert!(matches!(prog.body[0], Stmt::Call { ref name, .. } if name == "inc"));
-    assert!(matches!(prog.body[1], Stmt::Assign { ref target, .. } if target == "y"));
+    assert!(matches!(prog.body[1], Stmt::Assign { ref target, .. } if matches!(target.as_ref(), Expr::Ident(s) if s == "y")));
 }
 
 #[test]
