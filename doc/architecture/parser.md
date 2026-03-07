@@ -73,7 +73,7 @@ src/parser/
 ├── expressions.rs  # Arithmetic, relational, boolean expressions
 ├── statements.rs   # Assignment, if, while, call, block
 ├── functions.rs    # Function declarations
-├── program.rs      # Top-level program: functions* body*
+├── program.rs      # Top-level program: functions*
 ```
 
 ### 4.1 Literals
@@ -127,7 +127,7 @@ pub fn statement(input: &str) -> IResult<&str, Stmt> {
 
 ### 4.4 Functions
 
-Function declarations use the syntax `def name(params) body`:
+Function declarations use C-style syntax: `ReturnType name(Type param, ...) body`. Types are lowercase: `int`, `float`, `bool`, `str`, `void` (for Unit). Example: `int add(int x, int y) { ... }` or `void main() x = 1`.
 
 ```rust
 pub fn fun_decl(input: &str) -> IResult<&str, FunDecl> {
@@ -230,18 +230,15 @@ Assignment targets can be simple (`x`) or indexed (`arr[i]`). The assignment par
 
 ### 4.7 Program
 
-The top-level parser produces a `Program { functions, body }`:
+The top-level parser produces a `Program { functions }`:
 
 ```rust
 pub fn program(input: &str) -> IResult<&str, Program> {
-    map(
-        tuple((many0(fun_decl), many0(statement))),
-        |(functions, body)| Program { functions, body },
-    )(input)
+    map(many0(fun_decl), |functions| Program { functions })(input)
 }
 ```
 
-It parses zero or more function declarations, then zero or more statements (the main body). Use `all_consuming(program)` to require that the entire input is consumed.
+It parses zero or more function declarations. Execution starts at the `main` function (validated by the type checker). Use `all_consuming(program)` to require that the entire input is consumed.
 
 ---
 
@@ -372,9 +369,9 @@ Integration tests parse complete MiniC programs from fixture files in `tests/fix
 |---------|---------|---------|
 | `empty.minic` | (empty) | Empty program |
 | `statements_only.minic` | `x = 1` and `y = 2` | Body only, no functions |
-| `function_single.minic` | `def foo() x = 1` | Single function, no body |
-| `function_with_block.minic` | `def add(x, y) { x = x + y; x = x }` | Function with block body |
-| `full_program.minic` | Two functions and body with calls | Complete program |
+| `function_single.minic` | `void foo() x = 1` | Single function |
+| `function_with_block.minic` | `void add(int x, int y) { x = x + y; x = x }` | Function with block body |
+| `full_program.minic` | `void inc(int x)` and `void main() { inc(1); y = 42 }` | Complete program with main |
 | `invalid_syntax.minic` | Incomplete `def foo(` | Invalid input; parse must fail |
 
 Tests use `env!("CARGO_MANIFEST_DIR")` so fixture paths work regardless of the working directory. Input is trimmed before parsing to handle trailing newlines.

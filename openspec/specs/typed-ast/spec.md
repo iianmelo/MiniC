@@ -105,7 +105,7 @@ The AST SHALL use `FunDecl<Ty>` and `Program<Ty>` parameterized by the decoratio
 #### Scenario: Program structure
 
 - **WHEN** a program is represented
-- **THEN** it SHALL have `functions: Vec<FunDecl<Ty>>` and `body: Vec<StatementD<Ty>>`
+- **THEN** it SHALL have `functions: Vec<FunDecl<Ty>>` only (execution starts at `main`)
 
 #### Scenario: FunDecl structure
 

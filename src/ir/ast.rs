@@ -101,20 +101,22 @@ pub enum Statement<Ty> {
     },
 }
 
+/// A typed parameter: (name, type).
+pub type Param = (String, Type);
+
 /// A function declaration.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunDecl<Ty> {
     pub name: String,
-    pub params: Vec<String>,
+    pub params: Vec<Param>,
     pub return_type: Type,
     pub body: Box<StatementD<Ty>>,
 }
 
-/// A complete MiniC program: function declarations and main body.
+/// A complete MiniC program: function declarations only. Execution starts at `main`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program<Ty> {
     pub functions: Vec<FunDecl<Ty>>,
-    pub body: Vec<StatementD<Ty>>,
 }
 
 // Type synonyms for checked and unchecked phases.

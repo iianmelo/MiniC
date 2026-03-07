@@ -108,7 +108,7 @@ Use `all_consuming(parser)` when the entire input must be consumed; otherwise th
 
 ### 2.2 `tests/program.rs` — Full-Program Tests
 
-Tests parsing **complete MiniC programs** from fixture files in `tests/fixtures/`. Use this when you want to test the full pipeline (many functions + body) or multi-line programs.
+Tests parsing **complete MiniC programs** from fixture files in `tests/fixtures/`. Programs are functions only; execution starts at `main`. Use this when you want to test the full pipeline or multi-line programs.
 
 **Pattern:** Read a `.minic` file, parse with `all_consuming(program)`, assert on the resulting `Program`.
 
@@ -181,10 +181,11 @@ fn parse_and_type_check(src: &str) -> Result<Program<Type>, TypeError> {
 ```rust
 #[test]
 fn test_type_check_int_float_coercion() {
-    let result = parse_and_type_check("x = 1 + 3.14");
+    let result = parse_and_type_check("void main() x = 1 + 3.14");
     assert!(result.is_ok());
     let prog = result.unwrap();
-    if let Statement::Assign { ref value, .. } = prog.body[0].stmt {
+    let main_fn = prog.functions.iter().find(|f| f.name == "main").unwrap();
+    if let Statement::Assign { ref value, .. } = main_fn.body.stmt {
         assert_eq!(value.ty, Type::Float);
     } else {
         panic!("expected Assign");
@@ -197,7 +198,7 @@ fn test_type_check_int_float_coercion() {
 ```rust
 #[test]
 fn test_type_check_undeclared_var() {
-    let result = parse_and_type_check("x = y");
+    let result = parse_and_type_check("void main() x = y");
     assert!(result.is_err());
     assert!(result.unwrap_err().message.contains("undeclared"));
 }

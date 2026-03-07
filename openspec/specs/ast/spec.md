@@ -144,7 +144,7 @@ The AST SHALL include a node for function declarations with return type annotati
 #### Scenario: Function declaration
 
 - **WHEN** a function is declared
-- **THEN** it SHALL be represented as `FunDecl<Ty> { name: String, params: Vec<String>, return_type: Type, body: Box<StatementD<Ty>> }`
+- **THEN** it SHALL be represented as `FunDecl<Ty> { name: String, params: Vec<(String, Type)>, return_type: Type, body: Box<StatementD<Ty>> }`
 - **AND** `return_type` SHALL be the declared return type from the grammar
 
 ---
@@ -161,7 +161,8 @@ The AST SHALL define a root node representing a complete MiniC program.
 #### Scenario: Program with functions
 
 - **WHEN** a program includes function declarations
-- **THEN** the root SHALL have `functions: Vec<FunDecl<Ty>>` and `body: Vec<StatementD<Ty>>` for the main statements
+- **THEN** the root SHALL have `functions: Vec<FunDecl<Ty>>` only
+- **AND** execution SHALL start at the `main` function (validated by the type checker)
 
 ---
 

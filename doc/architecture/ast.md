@@ -110,7 +110,7 @@ Source  →  Parser  →  Program<()>  →  Type checker  →  Program<Type>  �
                     (UncheckedProgram)   (CheckedProgram)
 ```
 
-- **Parser**: Produces `ExprD<()>`, `StatementD<()>` with `ty: ()` at every node.
+- **Parser**: Produces `Program<()>` (functions only) with `ExprD<()>`, `StatementD<()>` at every node.
 - **Type checker**: Consumes `Program<()>`, returns `Result<Program<Type>, TypeError>`. On success, every node has `ty: Type`.
 - **Interpreter / Codegen**: Accept only `Program<Type>`; the type system prevents passing unchecked data.
 

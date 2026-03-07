@@ -1,6 +1,6 @@
 //! Expression parsers for MiniC.
 
-use crate::ir::ast::{Expr, ExprD};
+use crate::ir::ast::{Expr, ExprD, UncheckedExpr};
 use crate::parser::identifiers::identifier;
 use crate::parser::literals::literal;
 use nom::{
@@ -13,12 +13,12 @@ use nom::{
     IResult,
 };
 
-fn wrap(e: Expr<()>) -> ExprD<()> {
+fn wrap(e: Expr<()>) -> UncheckedExpr {
     ExprD { exp: e, ty: () }
 }
 
 /// Parse a function call: `identifier ( expr_list )`. Returns (name, args).
-pub fn parse_call(input: &str) -> IResult<&str, (String, Vec<ExprD<()>>)> {
+pub fn parse_call(input: &str) -> IResult<&str, (String, Vec<UncheckedExpr>)> {
     let (rest, name) = preceded(multispace0, identifier)(input)?;
     let (rest, args) = delimited(
         preceded(multispace0, tag("(")),
@@ -32,7 +32,7 @@ pub fn parse_call(input: &str) -> IResult<&str, (String, Vec<ExprD<()>>)> {
 }
 
 /// Atom: literal, call, array literal, identifier, or parenthesized expression.
-fn atom(input: &str) -> IResult<&str, ExprD<()>> {
+fn atom(input: &str) -> IResult<&str, UncheckedExpr> {
     alt((
         map(literal, |l| wrap(Expr::Literal(l.into()))),
         map(parse_call, |(name, args)| wrap(Expr::Call { name, args })),
@@ -57,7 +57,7 @@ fn atom(input: &str) -> IResult<&str, ExprD<()>> {
 }
 
 /// Primary: atom with zero or more index postfixes `[ expr ]`.
-fn primary(input: &str) -> IResult<&str, ExprD<()>> {
+fn primary(input: &str) -> IResult<&str, UncheckedExpr> {
     let (mut rest, mut acc) = atom(input)?;
     loop {
         let index_parse = delimited(
@@ -80,7 +80,7 @@ fn primary(input: &str) -> IResult<&str, ExprD<()>> {
 }
 
 /// Unary: optional unary `-` applied to primary.
-fn unary(input: &str) -> IResult<&str, ExprD<()>> {
+fn unary(input: &str) -> IResult<&str, UncheckedExpr> {
     alt((
         map(pair(preceded(multispace0, tag("-")), unary), |(_, e)| {
             wrap(Expr::Neg(Box::new(e)))
@@ -90,7 +90,7 @@ fn unary(input: &str) -> IResult<&str, ExprD<()>> {
 }
 
 /// Multiplicative: unary with `*` and `/` (left-associative).
-fn multiplicative(input: &str) -> IResult<&str, ExprD<()>> {
+fn multiplicative(input: &str) -> IResult<&str, UncheckedExpr> {
     let (mut rest, mut acc) = unary(input)?;
     loop {
         let mul = tuple((multispace0, tag("*"), multispace0, unary))(rest);
@@ -111,7 +111,7 @@ fn multiplicative(input: &str) -> IResult<&str, ExprD<()>> {
 }
 
 /// Additive: multiplicative with `+` and `-` (left-associative).
-fn additive(input: &str) -> IResult<&str, ExprD<()>> {
+fn additive(input: &str) -> IResult<&str, UncheckedExpr> {
     let (mut rest, mut acc) = multiplicative(input)?;
     loop {
         let add = tuple((multispace0, tag("+"), multispace0, multiplicative))(rest);
@@ -132,7 +132,7 @@ fn additive(input: &str) -> IResult<&str, ExprD<()>> {
 }
 
 /// Relational: additive with ==, !=, <, <=, >, >=
-fn relational(input: &str) -> IResult<&str, ExprD<()>> {
+fn relational(input: &str) -> IResult<&str, UncheckedExpr> {
     let (mut rest, mut acc) = additive(input)?;
     loop {
         let ops = alt((
@@ -163,7 +163,7 @@ fn relational(input: &str) -> IResult<&str, ExprD<()>> {
 }
 
 /// Logical not: optional `!` applied to relational.
-fn logical_not(input: &str) -> IResult<&str, ExprD<()>> {
+fn logical_not(input: &str) -> IResult<&str, UncheckedExpr> {
     alt((
         map(
             pair(
@@ -177,7 +177,7 @@ fn logical_not(input: &str) -> IResult<&str, ExprD<()>> {
 }
 
 /// Logical and: logical_not with `and` (left-associative).
-fn logical_and(input: &str) -> IResult<&str, ExprD<()>> {
+fn logical_and(input: &str) -> IResult<&str, UncheckedExpr> {
     let (mut rest, mut acc) = logical_not(input)?;
     loop {
         let and = tuple((multispace0, tag("and"), multispace0, logical_not))(rest);
@@ -192,7 +192,7 @@ fn logical_and(input: &str) -> IResult<&str, ExprD<()>> {
 }
 
 /// Logical or: logical_and with `or` (left-associative).
-fn logical_or(input: &str) -> IResult<&str, ExprD<()>> {
+fn logical_or(input: &str) -> IResult<&str, UncheckedExpr> {
     let (mut rest, mut acc) = logical_and(input)?;
     loop {
         let or = tuple((multispace0, tag("or"), multispace0, logical_and))(rest);
@@ -206,7 +206,7 @@ fn logical_or(input: &str) -> IResult<&str, ExprD<()>> {
     Ok((rest, acc))
 }
 
-/// Top-level expression parser. Returns ExprD<()> with ty: () at each node.
-pub fn expression(input: &str) -> IResult<&str, ExprD<()>> {
+/// Top-level expression parser. Returns UncheckedExpr with ty: () at each node.
+pub fn expression(input: &str) -> IResult<&str, UncheckedExpr> {
     preceded(multispace0, logical_or)(input)
 }

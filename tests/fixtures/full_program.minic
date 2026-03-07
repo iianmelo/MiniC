@@ -1,9 +1,9 @@
-def inc(x) -> Unit {
+void inc(int x) {
   x = x + 1;
   x = x
 }
 
-def main() -> Unit y = 0
-
-inc(1)
-y = 42
+void main() {
+  inc(1);
+  y = 42
+}

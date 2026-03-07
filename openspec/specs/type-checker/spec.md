@@ -43,19 +43,35 @@ The type checker SHALL assign types to literals and identifiers from context.
 
 ---
 
+### Requirement: Main function required
+
+The type checker SHALL require a `main` function as the program entry point.
+
+#### Scenario: Main exists
+
+- **WHEN** the program has a function named `main`
+- **THEN** the type checker SHALL proceed with type-checking
+
+#### Scenario: Main missing
+
+- **WHEN** the program has no function named `main`
+- **THEN** the type checker SHALL report a type error and stop
+
+---
+
 ### Requirement: Function-local scope
 
-The type checker SHALL use function-local scope for function bodies and global scope for the program body.
+The type checker SHALL use function-local scope for function bodies.
 
 #### Scenario: Parameters in scope
 
 - **WHEN** a function body is type-checked
 - **THEN** the function parameters SHALL be in scope for the body
 
-#### Scenario: Global body scope
+#### Scenario: Main body scope
 
-- **WHEN** the program body is type-checked
-- **THEN** variables SHALL use global scope (assigned before use)
+- **WHEN** the `main` function body is type-checked
+- **THEN** variables SHALL use local scope (assigned before use, or from params)
 
 ---
 

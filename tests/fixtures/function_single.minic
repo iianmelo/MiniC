@@ -1,1 +1,1 @@
-def foo() -> Unit x = 1
+void foo() x = 1

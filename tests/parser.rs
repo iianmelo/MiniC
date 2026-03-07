@@ -1,7 +1,7 @@
 //! Integration tests for the MiniC parser.
 
 use nom::combinator::all_consuming;
-use mini_c::ir::ast::{Expr, ExprD, Literal, Statement};
+use mini_c::ir::ast::{Expr, ExprD, Literal, Statement, Type};
 use mini_c::parser::{
     assignment, expression, fun_decl, identifier, literal,
     literals::{
@@ -105,6 +105,8 @@ fn test_identifier_reject_digit_start() {
 fn test_identifier_reject_reserved() {
     assert!(identifier("true").is_err());
     assert!(identifier("false").is_err());
+    assert!(identifier("int").is_err());
+    assert!(identifier("void").is_err());
 }
 
 #[test]
@@ -436,9 +438,12 @@ fn test_invalid_while() {
 
 #[test]
 fn test_fun_decl_with_params() {
-    let result = fun_decl("def foo(x, y) -> Unit x = x + y").unwrap().1;
+    let result = fun_decl("void foo(int x, int y) x = x + y").unwrap().1;
     assert_eq!(result.name, "foo");
-    assert_eq!(result.params, vec!["x", "y"]);
+    assert_eq!(
+        result.params,
+        vec![("x".to_string(), Type::Int), ("y".to_string(), Type::Int)]
+    );
     assert!(matches!(result.body.stmt, Statement::Assign { ref target, .. } if matches!(target.exp, Expr::Ident(ref s) if s == "x")));
     if let Statement::Assign { ref value, .. } = &result.body.stmt {
         assert!(matches!(value.exp, Expr::Add(_, _)));
@@ -446,8 +451,14 @@ fn test_fun_decl_with_params() {
 }
 
 #[test]
+fn test_fun_decl_old_syntax_reject() {
+    assert!(fun_decl("def foo(int x) void x = 1").is_err());
+    assert!(fun_decl("void bar(x) x = 1").is_err()); // untyped param
+}
+
+#[test]
 fn test_fun_decl_no_params() {
-    let result = fun_decl("def bar() -> Unit x = 1").unwrap().1;
+    let result = fun_decl("void bar() x = 1").unwrap().1;
     assert_eq!(result.name, "bar");
     assert!(result.params.is_empty());
     assert!(
@@ -524,7 +535,7 @@ fn test_block_multiple_statements() {
 
 #[test]
 fn test_block_in_function_body() {
-    let result = fun_decl("def foo(x, y) -> Unit { x = x + 1; y = y + 1 }")
+    let result = fun_decl("void foo(int x, int y) { x = x + 1; y = y + 1 }")
         .unwrap()
         .1;
     assert!(matches!(result.body.stmt, Statement::Block { ref seq } if seq.len() == 2));

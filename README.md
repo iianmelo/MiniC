@@ -51,6 +51,7 @@ If you want to contribute (e.g. add a feature or fix a bug), start by reading th
 
 ## Key Concepts
 
+- **Program structure** — Functions only; execution starts at `main`
 - **Unchecked AST** (`Program<()>`, `ExprD<()>`) — Parser output; no type information
 - **Checked AST** (`Program<Type>`, `ExprD<Type>`) — Type checker output; every node has a `Type`
 - **Phase separation** — Downstream phases (interpreter, codegen) accept only checked AST; Rust's type system enforces this

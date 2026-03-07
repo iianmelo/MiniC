@@ -1,6 +1,6 @@
 //! Statement parsers for MiniC.
 
-use crate::ir::ast::{Expr, ExprD, Statement, StatementD};
+use crate::ir::ast::{Expr, ExprD, Statement, StatementD, UncheckedExpr, UncheckedStmt};
 use crate::parser::expressions::{expression, parse_call};
 use crate::parser::identifiers::identifier;
 use nom::{
@@ -13,12 +13,12 @@ use nom::{
     IResult,
 };
 
-fn wrap(s: Statement<()>) -> StatementD<()> {
+fn wrap(s: Statement<()>) -> UncheckedStmt {
     StatementD { stmt: s, ty: () }
 }
 
 /// Parse any statement: if | while | call | block | assignment.
-pub fn statement(input: &str) -> IResult<&str, StatementD<()>> {
+pub fn statement(input: &str) -> IResult<&str, UncheckedStmt> {
     preceded(
         multispace0,
         alt((
@@ -32,7 +32,7 @@ pub fn statement(input: &str) -> IResult<&str, StatementD<()>> {
 }
 
 /// Parse a block statement: `{ stmt ; stmt ; ... }`.
-fn block_statement(input: &str) -> IResult<&str, StatementD<()>> {
+fn block_statement(input: &str) -> IResult<&str, UncheckedStmt> {
     map(
         delimited(
             preceded(multispace0, char('{')),
@@ -47,12 +47,12 @@ fn block_statement(input: &str) -> IResult<&str, StatementD<()>> {
 }
 
 /// Parse a function call as a statement: `identifier ( expr_list )`.
-fn call_statement(input: &str) -> IResult<&str, StatementD<()>> {
+fn call_statement(input: &str) -> IResult<&str, UncheckedStmt> {
     map(parse_call, |(name, args)| wrap(Statement::Call { name, args }))(input)
 }
 
 /// Parse an if-then-else statement: `if expr then stmt [else stmt]`.
-fn if_statement(input: &str) -> IResult<&str, StatementD<()>> {
+fn if_statement(input: &str) -> IResult<&str, UncheckedStmt> {
     let (rest, _) = preceded(multispace0, tag("if"))(input)?;
     let (rest, cond) = preceded(multispace0, expression)(rest)?;
     let (rest, _) = preceded(multispace0, tag("then"))(rest)?;
@@ -75,7 +75,7 @@ fn if_statement(input: &str) -> IResult<&str, StatementD<()>> {
 }
 
 /// Parse a while statement: `while expr do stmt`.
-fn while_statement(input: &str) -> IResult<&str, StatementD<()>> {
+fn while_statement(input: &str) -> IResult<&str, UncheckedStmt> {
     let (rest, _) = preceded(multispace0, tag("while"))(input)?;
     let (rest, cond) = preceded(multispace0, expression)(rest)?;
     let (rest, _) = preceded(multispace0, tag("do"))(rest)?;
@@ -90,7 +90,7 @@ fn while_statement(input: &str) -> IResult<&str, StatementD<()>> {
 }
 
 /// Parse an lvalue: identifier followed by zero or more `[ expr ]` suffixes.
-fn lvalue(input: &str) -> IResult<&str, ExprD<()>> {
+fn lvalue(input: &str) -> IResult<&str, UncheckedExpr> {
     let (mut rest, id) = preceded(multispace0, identifier)(input)?;
     let mut acc = ExprD {
         exp: Expr::Ident(id.to_string()),
@@ -120,7 +120,7 @@ fn lvalue(input: &str) -> IResult<&str, ExprD<()>> {
 }
 
 /// Parse an assignment statement: `lvalue = expression`.
-pub fn assignment(input: &str) -> IResult<&str, StatementD<()>> {
+pub fn assignment(input: &str) -> IResult<&str, UncheckedStmt> {
     map(
         tuple((
             lvalue,
