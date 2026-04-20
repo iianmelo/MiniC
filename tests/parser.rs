@@ -466,6 +466,123 @@ fn test_invalid_while() {
     assert!(statement("while x y = 1;").is_err());
 }
 
+// --- For ---
+
+#[test]
+fn test_simple_for() {
+    let result = statement("for (int i = 0; i < 10; i = i + 1) { sum = sum + i; }")
+        .unwrap()
+        .1;
+    assert!(matches!(result.stmt, Statement::For { .. }));
+    if let Statement::For {
+        ref init,
+        ref cond,
+        ref update,
+        ref body,
+    } = result.stmt
+    {
+        assert!(matches!(init.stmt, Statement::Decl { ref name, ref ty, .. }
+            if name == "i" && ty == &Type::Int));
+        if let Statement::Decl { ref init, .. } = init.stmt {
+            assert_eq!(init.exp, Expr::Literal(Literal::Int(0)));
+        }
+        assert!(matches!(cond.exp, Expr::Lt(_, _)));
+        assert!(matches!(update.stmt, Statement::Assign { ref target, ref value }
+            if matches!(target.exp, Expr::Ident(ref s) if s == "i")
+            && matches!(value.exp, Expr::Add(_, _))));
+        assert!(matches!(body.stmt, Statement::Block { ref seq }
+            if seq.len() == 1
+            && matches!(seq[0].stmt, Statement::Assign { ref target, .. }
+                if matches!(target.exp, Expr::Ident(ref s) if s == "sum"))));
+    }
+}
+
+#[test]
+fn test_for_with_assign_init() {
+    let result = statement("for (i = 0; i < n; i = i + 1) { x = x + 1; }")
+        .unwrap()
+        .1;
+    assert!(matches!(result.stmt, Statement::For { .. }));
+    if let Statement::For {
+        ref init,
+        ref update,
+        ..
+    } = result.stmt
+    {
+        assert!(matches!(init.stmt, Statement::Assign { ref target, ref value }
+            if matches!(target.exp, Expr::Ident(ref s) if s == "i")
+            && value.exp == Expr::Literal(Literal::Int(0))));
+        assert!(matches!(
+            update.stmt,
+            Statement::Assign { .. }
+        ));
+    }
+}
+
+#[test]
+fn test_nested_for() {
+    let result = statement(
+        "for (int i = 0; i < 2; i = i + 1) { for (int j = 0; j < 2; j = j + 1) { x = x + 1; } }",
+    )
+    .unwrap()
+    .1;
+    assert!(matches!(result.stmt, Statement::For { .. }));
+    if let Statement::For { ref body, .. } = result.stmt {
+        assert!(matches!(body.stmt, Statement::Block { ref seq }
+            if seq.len() == 1 && matches!(seq[0].stmt, Statement::For { .. })));
+    }
+}
+
+#[test]
+fn test_for_inside_function() {
+    let result = mini_c::parser::fun_decl(
+        "void main() { int sum = 0; for (int i = 0; i < 10; i = i + 1) { sum = sum + i; } print(sum); }",
+    )
+    .unwrap()
+    .1;
+    assert_eq!(result.name, "main");
+    assert!(matches!(result.body.stmt, Statement::Block { ref seq } if seq.len() == 3));
+    if let Statement::Block { ref seq } = result.body.stmt {
+        assert!(matches!(seq[0].stmt, Statement::Decl { ref name, .. } if name == "sum"));
+        assert!(matches!(seq[1].stmt, Statement::For { .. }));
+        assert!(matches!(seq[2].stmt, Statement::Call { ref name, .. } if name == "print"));
+    }
+}
+
+#[test]
+fn test_for_whitespace() {
+    assert!(statement("for(int i=0;i<10;i=i+1){x=x+1;}").is_ok());
+    assert!(statement(
+        "for  (  int  i  =  0  ;  i  <  10  ;  i  =  i  +  1  )  {  x  =  x  +  1  ;  }"
+    )
+    .is_ok());
+}
+
+#[test]
+fn test_invalid_for_missing_parens() {
+    assert!(statement("for int i = 0; i < 10; i = i + 1 { x = 1; }").is_err());
+}
+
+#[test]
+fn test_invalid_for_missing_semis() {
+    assert!(statement("for (int i = 0 i < 10 i = i + 1) { x = 1; }").is_err());
+}
+
+#[test]
+fn test_invalid_for_bare_body() {
+    assert!(all_consuming(statement)("for (int i = 0; i < 10; i = i + 1) sum = sum + i;").is_err());
+}
+
+#[test]
+fn test_invalid_for_update_not_assign() {
+    assert!(statement("for (int i = 0; i < 10; i + 1) { x = 1; }").is_err());
+}
+
+#[test]
+fn test_for_reject_as_identifier() {
+    assert!(identifier("for").is_err());
+}
+
 // --- Functions ---
 
 #[test]

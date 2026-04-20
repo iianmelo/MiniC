@@ -149,6 +149,18 @@ pub enum Statement<Ty> {
         cond: Box<ExprD<Ty>>,
         body: Box<StatementD<Ty>>,
     },
+    /// Three-part for loop: `for (init; cond; update) body`.
+    ///
+    /// The parser constrains `init` to `Decl` or `Assign`, `update` to
+    /// `Assign`, and `body` to `Block`. The AST keeps the fields as general
+    /// `StatementD<Ty>` so later stages can reuse the existing per-variant
+    /// dispatch logic for declarations and assignments.
+    For {
+        init: Box<StatementD<Ty>>,
+        cond: Box<ExprD<Ty>>,
+        update: Box<StatementD<Ty>>,
+        body: Box<StatementD<Ty>>,
+    },
     /// Return statement: `return [expr]`.
     Return(Option<Box<ExprD<Ty>>>),
 }
