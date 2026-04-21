@@ -771,6 +771,330 @@ fn test_return_inside_for() {
     }
 }
 
+// --- For: single-clause-present variants ---
+
+#[test]
+fn test_for_only_init_present() {
+    let result = all_consuming(statement)("for (int i = 0; ; ) { x = x + 1; }")
+        .unwrap()
+        .1;
+    if let Statement::For {
+        ref init,
+        ref cond,
+        ref update,
+        ..
+    } = result.stmt
+    {
+        assert!(matches!(
+            init.as_ref().map(|i| &i.stmt),
+            Some(Statement::Decl { .. })
+        ));
+        assert!(cond.is_none());
+        assert!(update.is_none());
+    } else {
+        panic!("expected Statement::For");
+    }
+}
+
+#[test]
+fn test_for_only_cond_present() {
+    let result = all_consuming(statement)("for (; i < 10; ) { x = x + 1; }")
+        .unwrap()
+        .1;
+    if let Statement::For {
+        ref init,
+        ref cond,
+        ref update,
+        ..
+    } = result.stmt
+    {
+        assert!(init.is_none());
+        assert!(matches!(cond.as_ref().map(|c| &c.exp), Some(Expr::Lt(_, _))));
+        assert!(update.is_none());
+    } else {
+        panic!("expected Statement::For");
+    }
+}
+
+#[test]
+fn test_for_only_update_present() {
+    let result = all_consuming(statement)("for (; ; i = i + 1) { x = x + 1; }")
+        .unwrap()
+        .1;
+    if let Statement::For {
+        ref init,
+        ref cond,
+        ref update,
+        ..
+    } = result.stmt
+    {
+        assert!(init.is_none());
+        assert!(cond.is_none());
+        assert!(matches!(
+            update.as_ref().map(|u| &u.stmt),
+            Some(Statement::Assign { .. })
+        ));
+    } else {
+        panic!("expected Statement::For");
+    }
+}
+
+// --- For: additional rejection cases ---
+
+#[test]
+fn test_invalid_for_missing_open_paren() {
+    assert!(all_consuming(statement)("for int i = 0; i < 10; i = i + 1) { x = 1; }").is_err());
+}
+
+#[test]
+fn test_invalid_for_missing_close_paren() {
+    assert!(all_consuming(statement)("for (int i = 0; i < 10; i = i + 1 { x = 1; }").is_err());
+}
+
+#[test]
+fn test_invalid_for_one_semi() {
+    assert!(all_consuming(statement)("for (;) { x = 1; }").is_err());
+}
+
+#[test]
+fn test_invalid_for_zero_semis() {
+    assert!(all_consuming(statement)("for () { x = 1; }").is_err());
+}
+
+#[test]
+fn test_invalid_for_too_many_semis() {
+    assert!(all_consuming(statement)("for (;;;) { x = 1; }").is_err());
+}
+
+#[test]
+fn test_invalid_for_decl_in_update() {
+    assert!(
+        all_consuming(statement)("for (int i = 0; i < 10; int j = 0) { x = 1; }").is_err()
+    );
+}
+
+#[test]
+fn test_invalid_for_call_in_init() {
+    assert!(
+        all_consuming(statement)("for (f(x); i < 10; i = i + 1) { x = 1; }").is_err()
+    );
+}
+
+#[test]
+fn test_invalid_for_expr_in_init() {
+    assert!(
+        all_consuming(statement)("for (i + 1; i < 10; i = i + 1) { x = 1; }").is_err()
+    );
+}
+
+// --- For: additional valid-form coverage ---
+
+#[test]
+fn test_for_init_with_indexed_lvalue() {
+    let result = statement("for (arr[i] = 0; n < 10; n = n + 1) { y = 1; }")
+        .unwrap()
+        .1;
+    if let Statement::For { ref init, .. } = result.stmt {
+        let init = init.as_ref().unwrap();
+        assert!(matches!(init.stmt, Statement::Assign { ref target, .. }
+            if matches!(target.exp, Expr::Index { .. })));
+    } else {
+        panic!("expected Statement::For");
+    }
+}
+
+#[test]
+fn test_for_init_with_array_decl() {
+    let result =
+        statement("for (int[] xs = [1, 2, 3]; n < 10; n = n + 1) { y = 1; }")
+            .unwrap()
+            .1;
+    if let Statement::For { ref init, .. } = result.stmt {
+        let init = init.as_ref().unwrap();
+        assert!(matches!(init.stmt, Statement::Decl { ref name, ref ty, .. }
+            if name == "xs" && matches!(ty, Type::Array(_))));
+        if let Statement::Decl { ref init, .. } = init.stmt {
+            assert!(matches!(init.exp, Expr::ArrayLit(ref elems) if elems.len() == 3));
+        }
+    } else {    
+        panic!("expected Statement::For");
+    }
+}
+
+#[test]
+fn test_for_init_with_arithmetic_expr() {
+    let result = statement("for (int i = n - 1; i > 0; i = i - 1) { y = 1; }")
+        .unwrap()
+        .1;
+    if let Statement::For { ref init, .. } = result.stmt {
+        let init = init.as_ref().unwrap();
+        assert!(matches!(init.stmt, Statement::Decl { ref init, .. }
+            if matches!(init.exp, Expr::Sub(_, _))));
+    } else {
+        panic!("expected Statement::For");
+    }
+}
+
+#[test]
+fn test_for_init_with_negative_literal() {
+    let result = statement("for (int i = -1; i < 0; i = i + 1) { y = 1; }")
+        .unwrap()
+        .1;
+    if let Statement::For { ref init, .. } = result.stmt {
+        let init = init.as_ref().unwrap();
+        assert!(matches!(init.stmt, Statement::Decl { ref init, .. }
+            if matches!(init.exp, Expr::Neg(_) | Expr::Literal(Literal::Int(_)))));
+    } else {
+        panic!("expected Statement::For");
+    }
+}
+
+#[test]
+fn test_for_cond_with_call() {
+    let result = statement("for (int i = 0; done(i); i = i + 1) { y = 1; }")
+        .unwrap()
+        .1;
+    if let Statement::For { ref cond, .. } = result.stmt {
+        let cond = cond.as_ref().unwrap();
+        assert!(
+            matches!(cond.exp, Expr::Call { ref name, ref args } if name == "done" && args.len() == 1)
+        );
+    } else {
+        panic!("expected Statement::For");
+    }
+}
+
+#[test]
+fn test_for_cond_literal_true() {
+    let result = all_consuming(statement)("for (; true; ) { return 0; }")
+        .unwrap()
+        .1;
+    if let Statement::For {
+        ref cond,
+        ref body,
+        ..
+    } = result.stmt
+    {
+        let cond = cond.as_ref().unwrap();
+        assert_eq!(cond.exp, Expr::Literal(Literal::Bool(true)));
+        assert!(matches!(body.stmt, Statement::Block { ref seq }
+            if seq.len() == 1 && matches!(seq[0].stmt, Statement::Return(Some(_)))));
+    } else {
+        panic!("expected Statement::For");
+    }
+}
+
+#[test]
+fn test_for_multi_statement_body() {
+    let result = statement(
+        "for (int i = 0; i < 10; i = i + 1) { x = x + 1; y = y + 2; z = z + 3; }",
+    )
+    .unwrap()
+    .1;
+    if let Statement::For { ref body, .. } = result.stmt {
+        assert!(matches!(body.stmt, Statement::Block { ref seq } if seq.len() == 3));
+        if let Statement::Block { ref seq } = body.stmt {
+            assert!(matches!(seq[0].stmt, Statement::Assign { ref target, .. }
+                if matches!(target.exp, Expr::Ident(ref s) if s == "x")));
+            assert!(matches!(seq[1].stmt, Statement::Assign { ref target, .. }
+                if matches!(target.exp, Expr::Ident(ref s) if s == "y")));
+            assert!(matches!(seq[2].stmt, Statement::Assign { ref target, .. }
+                if matches!(target.exp, Expr::Ident(ref s) if s == "z")));
+        }
+    } else {
+        panic!("expected Statement::For");
+    }
+}
+
+#[test]
+fn test_if_inside_for() {
+    let result = statement(
+        "for (int i = 0; i < 10; i = i + 1) { if x { y = 1; } else { y = 2; } }",
+    )
+    .unwrap()
+    .1;
+    if let Statement::For { ref body, .. } = result.stmt {
+        assert!(matches!(body.stmt, Statement::Block { ref seq }
+            if seq.len() == 1 && matches!(seq[0].stmt, Statement::If { .. })));
+    } else {
+        panic!("expected Statement::For");
+    }
+}
+
+#[test]
+fn test_for_inside_if() {
+    let result = statement(
+        "if x { for (int i = 0; i < 10; i = i + 1) { y = 1; } }",
+    )
+    .unwrap()
+    .1;
+    if let Statement::If { ref then_branch, .. } = result.stmt {
+        assert!(matches!(then_branch.stmt, Statement::Block { ref seq }
+            if seq.len() == 1 && matches!(seq[0].stmt, Statement::For { .. })));
+    } else {
+        panic!("expected Statement::If");
+    }
+}
+
+#[test]
+fn test_for_sequence_in_block() {
+    let result = statement(
+        "{ for (int i = 0; i < 2; i = i + 1) { x = 1; } for (int j = 0; j < 2; j = j + 1) { y = 1; } }",
+    )
+    .unwrap()
+    .1;
+    if let Statement::Block { ref seq } = result.stmt {
+        assert_eq!(seq.len(), 2);
+        assert!(matches!(seq[0].stmt, Statement::For { .. }));
+        assert!(matches!(seq[1].stmt, Statement::For { .. }));
+    } else {
+        panic!("expected Statement::Block");
+    }
+}
+
+#[test]
+fn test_for_header_multiline() {
+    let src = "for (\n    int i = 0;\n    i < 10;\n    i = i + 1\n) { x = x + 1; }";
+    let result = all_consuming(statement)(src).unwrap().1;
+    assert!(matches!(result.stmt, Statement::For { .. }));
+    if let Statement::For {
+        ref init,
+        ref cond,
+        ref update,
+        ..
+    } = result.stmt
+    {
+        assert!(init.is_some());
+        assert!(cond.is_some());
+        assert!(update.is_some());
+    }
+}
+
+// --- For: all-consuming hardening of happy-path cases ---
+
+#[test]
+fn test_simple_for_all_consuming() {
+    assert!(
+        all_consuming(statement)("for (int i = 0; i < 10; i = i + 1) { sum = sum + i; }").is_ok()
+    );
+}
+
+#[test]
+fn test_nested_for_all_consuming() {
+    assert!(all_consuming(statement)(
+        "for (int i = 0; i < 2; i = i + 1) { for (int j = 0; j < 2; j = j + 1) { x = x + 1; } }"
+    )
+    .is_ok());
+}
+
+#[test]
+fn test_for_inside_function_all_consuming() {
+    assert!(all_consuming(mini_c::parser::fun_decl)(
+        "void main() { int sum = 0; for (int i = 0; i < 10; i = i + 1) { sum = sum + i; } print(sum); }"
+    )
+    .is_ok());
+}
+
 // --- Functions ---
 
 #[test]
