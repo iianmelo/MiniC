@@ -583,6 +583,112 @@ fn test_for_reject_as_identifier() {
     assert!(identifier("for").is_err());
 }
 
+// Empty clauses are explicitly out of scope (see design.md). The parser MUST
+// reject any form where `init`, `cond`, or `update` is absent.
+#[test]
+fn test_invalid_for_all_empty_clauses() {
+    assert!(statement("for (;;) { x = 1; }").is_err());
+}
+
+#[test]
+fn test_invalid_for_empty_init() {
+    assert!(statement("for (; i < 10; i = i + 1) { x = 1; }").is_err());
+}
+
+#[test]
+fn test_invalid_for_empty_cond() {
+    assert!(statement("for (int i = 0; ; i = i + 1) { x = 1; }").is_err());
+}
+
+#[test]
+fn test_invalid_for_empty_update() {
+    assert!(statement("for (int i = 0; i < 10; ) { x = 1; }").is_err());
+}
+
+#[test]
+fn test_for_empty_body() {
+    let result = statement("for (int i = 0; i < 10; i = i + 1) { }").unwrap().1;
+    assert!(matches!(result.stmt, Statement::For { .. }));
+    if let Statement::For { ref body, .. } = result.stmt {
+        assert!(matches!(body.stmt, Statement::Block { ref seq } if seq.is_empty()));
+    }
+}
+
+#[test]
+fn test_for_complex_cond() {
+    let result = statement("for (int i = 0; i < 10 and x > 0; i = i + 1) { y = 1; }")
+        .unwrap()
+        .1;
+    assert!(matches!(result.stmt, Statement::For { .. }));
+    if let Statement::For { ref cond, .. } = result.stmt {
+        assert!(matches!(cond.exp, Expr::And(_, _)));
+    }
+}
+
+#[test]
+fn test_for_update_with_array_index() {
+    let result = statement("for (int i = 0; i < n; arr[i] = arr[i] + 1) { y = 1; }")
+        .unwrap()
+        .1;
+    assert!(matches!(result.stmt, Statement::For { .. }));
+    if let Statement::For { ref update, .. } = result.stmt {
+        assert!(matches!(update.stmt, Statement::Assign { ref target, .. }
+            if matches!(target.exp, Expr::Index { .. })));
+    }
+}
+
+#[test]
+fn test_for_init_with_call() {
+    let result = statement("for (int i = f(x); i < 10; i = i + 1) { y = 1; }")
+        .unwrap()
+        .1;
+    assert!(matches!(result.stmt, Statement::For { .. }));
+    if let Statement::For { ref init, .. } = result.stmt {
+        assert!(matches!(init.stmt, Statement::Decl { ref init, .. }
+            if matches!(init.exp, Expr::Call { ref name, .. } if name == "f")));
+    }
+}
+
+#[test]
+fn test_for_inside_while() {
+    let result = statement(
+        "while x < 10 { for (int i = 0; i < 2; i = i + 1) { y = 1; } }",
+    )
+    .unwrap()
+    .1;
+    assert!(matches!(result.stmt, Statement::While { .. }));
+    if let Statement::While { ref body, .. } = result.stmt {
+        assert!(matches!(body.stmt, Statement::Block { ref seq }
+            if seq.len() == 1 && matches!(seq[0].stmt, Statement::For { .. })));
+    }
+}
+
+#[test]
+fn test_while_inside_for() {
+    let result = statement(
+        "for (int i = 0; i < 2; i = i + 1) { while j < 10 { j = j + 1; } }",
+    )
+    .unwrap()
+    .1;
+    assert!(matches!(result.stmt, Statement::For { .. }));
+    if let Statement::For { ref body, .. } = result.stmt {
+        assert!(matches!(body.stmt, Statement::Block { ref seq }
+            if seq.len() == 1 && matches!(seq[0].stmt, Statement::While { .. })));
+    }
+}
+
+#[test]
+fn test_return_inside_for() {
+    let result = statement("for (int i = 0; i < 10; i = i + 1) { return i; }")
+        .unwrap()
+        .1;
+    assert!(matches!(result.stmt, Statement::For { .. }));
+    if let Statement::For { ref body, .. } = result.stmt {
+        assert!(matches!(body.stmt, Statement::Block { ref seq }
+            if seq.len() == 1 && matches!(seq[0].stmt, Statement::Return(Some(_)))));
+    }
+}
+
 // --- Functions ---
 
 #[test]
