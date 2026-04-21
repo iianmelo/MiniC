@@ -8,13 +8,12 @@ project covers the concrete syntax, AST, and parser.
 ## What Changes
 
 - Extend `src/ir/ast.rs` with a new `Statement::For { init, cond, update, body }`
-  variant. `init` and `update` reuse `StatementD<Ty>` so the existing
-  `Decl`/`Assign` shapes can be reused by later pipeline stages.
+  variant where `init`, `cond`, and `update` are optional.
 - Add a `for_statement` parser in `src/parser/statements.rs` recognising
-  `for '(' init ';' expression ';' update ')' block`, where `init` is a
-  declaration or assignment (without the trailing `;`) and `update` is an
-  assignment (also without the trailing `;`). The body must be a block, matching
-  the existing `if`/`while` convention.
+  `for '(' [init] ';' [expression] ';' [update] ')' block`, where `init` is
+  an optional declaration/assignment (without trailing `;`) and `update` is
+  an optional assignment (also without trailing `;`). The body must be a
+  block, matching the existing `if`/`while` convention.
 - Register `for_statement` in the `statement` dispatcher before `decl_statement`
   and `assignment` so the `for` keyword is matched unambiguously.
 - Add `"for"` to the `RESERVED` list in `src/parser/identifiers.rs` so it cannot
@@ -26,8 +25,8 @@ project covers the concrete syntax, AST, and parser.
 
 ### New Capabilities
 
-- `for-statement`: Parsing of the three-part `for (init; condition; update) body`
-  statement in MiniC, producing `Stmt::For` AST nodes.
+- `for-statement`: Parsing of `for ([init]; [condition]; [update]) body`
+  statements in MiniC, including `for (;;)`.
 
 ### Modified Capabilities
 

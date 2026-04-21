@@ -151,14 +151,15 @@ pub enum Statement<Ty> {
     },
     /// Three-part for loop: `for (init; cond; update) body`.
     ///
-    /// The parser constrains `init` to `Decl` or `Assign`, `update` to
-    /// `Assign`, and `body` to `Block`. The AST keeps the fields as general
-    /// `StatementD<Ty>` so later stages can reuse the existing per-variant
-    /// dispatch logic for declarations and assignments.
+    /// Any of the three header clauses may be omitted:
+    /// `for (;;)` is valid and represents an open-ended loop.
+    ///
+    /// When present, the parser constrains `init` to `Decl` or `Assign`,
+    /// `update` to `Assign`, and `body` to `Block`.
     For {
-        init: Box<StatementD<Ty>>,
-        cond: Box<ExprD<Ty>>,
-        update: Box<StatementD<Ty>>,
+        init: Option<Box<StatementD<Ty>>>,
+        cond: Option<Box<ExprD<Ty>>>,
+        update: Option<Box<StatementD<Ty>>>,
         body: Box<StatementD<Ty>>,
     },
     /// Return statement: `return [expr]`.

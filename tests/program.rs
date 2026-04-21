@@ -113,7 +113,10 @@ fn test_parse_for_loop_program() {
             ..
         } = seq[1].stmt
         {
+            let init = init.as_ref().unwrap();
             assert!(matches!(init.stmt, Statement::Decl { ref name, .. } if name == "i"));
+
+            let update = update.as_ref().unwrap();
             assert!(matches!(update.stmt, Statement::Assign { .. }));
             assert!(matches!(body.stmt, Statement::Block { ref seq } if seq.len() == 1));
         }

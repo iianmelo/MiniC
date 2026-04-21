@@ -14,10 +14,12 @@ variants are needed.
 
 **Goals:**
 
-- Parse `for (init; condition; update) block` producing `Stmt::For { init, cond,
-  update, body }`.
-- Accept both declaration (`int i = 0`) and assignment (`i = 0`) as *init*.
-- Require *update* to be an assignment.
+- Parse `for ([init]; [condition]; [update]) block` producing
+  `Stmt::For { init, cond, update, body }` where the three header clauses are
+  optional.
+- Accept both declaration (`int i = 0`) and assignment (`i = 0`) as *init*
+  when provided.
+- Require *update* to be an assignment when provided.
 - Require *body* to be a block (`{ … }`) for parity with `if`/`while`.
 - Reject `for` as an identifier.
 
@@ -27,8 +29,7 @@ variants are needed.
   the init variable, and the well-typedness of the update (Milestone 2).
 - Interpreter execution semantics (Milestone 2).
 - Code generation (Milestone 3).
-- `for`-with-empty-clauses (e.g. `for (;;)`), multi-statement init, or comma
-  operators.
+- Multi-statement init and comma operators.
 
 ## Decisions
 
@@ -55,17 +56,16 @@ enclosed in `{ … }`), not any statement.
 language uniform, and avoids the classic dangling-else-style ambiguities when
 the body is a bare statement that itself contains `;`.
 
-### 3. `init` and `update` are `StatementD<Ty>` with parser-side restrictions
+### 3. Optional `init` / `cond` / `update` with parser-side restrictions
 
-**Choice:** The AST field `init` is typed as `Box<StatementD<Ty>>` and may
-structurally hold any statement; likewise `update`. The *parser* only produces
-`Decl`/`Assign` in `init` and `Assign` in `update`.
+**Choice:** The AST fields `init`, `cond`, and `update` are optional. When
+present, `init` is parsed as `Decl`/`Assign` and `update` is parsed as
+`Assign`.
 
-**Rationale:** Reuses `StatementD<Ty>` so that the Milestone 2 type checker
-can dispatch on the existing `Decl`/`Assign` arms without new code paths. This
-mirrors the existing treatment of lvalues in assignment targets, where the
-parser guarantees that `target` is an `Ident` or `Index` even though the AST
-field is a general `ExprD`.
+**Rationale:** Optional clauses align MiniC with C-style `for` loops while
+keeping the parser deterministic. Reusing `StatementD<Ty>` for the present
+`init`/`update` cases lets the Milestone 2 type checker dispatch on existing
+`Decl`/`Assign` arms without new statement variants.
 
 ### 4. No-semicolon init/update helpers
 

@@ -17,7 +17,7 @@
 //! block      := '{' statement* '}'
 //! if_stmt    := 'if' expr block ['else' block]
 //! while_stmt := 'while' expr block
-//! for_stmt   := 'for' '(' for_init ';' expr ';' for_update ')' block
+//! for_stmt   := 'for' '(' [for_init] ';' [expr] ';' [for_update] ')' block
 //! for_init   := decl_no_semi | assign_no_semi
 //! for_update := assign_no_semi
 //! simple     := return | decl | call | assign
@@ -212,27 +212,27 @@ fn for_update_clause(input: &str) -> IResult<&str, UncheckedStmt> {
     assign_no_semi(input)
 }
 
-/// Parse a for statement: `for ( init ; cond ; update ) block`.
-/// - `init` is a declaration or assignment (no trailing `;`).
-/// - `cond` is an expression.
-/// - `update` is an assignment (no trailing `;`).
+/// Parse a for statement: `for ( [init] ; [cond] ; [update] ) block`.
+/// - `init` is an optional declaration or assignment (no trailing `;`).
+/// - `cond` is an optional expression.
+/// - `update` is an optional assignment (no trailing `;`).
 /// - The body must be a block; bare statements are not allowed.
 fn for_statement(input: &str) -> IResult<&str, UncheckedStmt> {
     let (rest, _) = preceded(multispace0, tag("for"))(input)?;
     let (rest, _) = preceded(multispace0, char('('))(rest)?;
-    let (rest, init) = preceded(multispace0, for_init_clause)(rest)?;
+    let (rest, init) = opt(preceded(multispace0, for_init_clause))(rest)?;
     let (rest, _) = preceded(multispace0, char(';'))(rest)?;
-    let (rest, cond) = preceded(multispace0, expression)(rest)?;
+    let (rest, cond) = opt(preceded(multispace0, expression))(rest)?;
     let (rest, _) = preceded(multispace0, char(';'))(rest)?;
-    let (rest, update) = preceded(multispace0, for_update_clause)(rest)?;
+    let (rest, update) = opt(preceded(multispace0, for_update_clause))(rest)?;
     let (rest, _) = preceded(multispace0, char(')'))(rest)?;
     let (rest, body) = preceded(multispace0, block_statement)(rest)?;
     Ok((
         rest,
         wrap(Statement::For {
-            init: Box::new(init),
-            cond: Box::new(cond),
-            update: Box::new(update),
+            init: init.map(Box::new),
+            cond: cond.map(Box::new),
+            update: update.map(Box::new),
             body: Box::new(body),
         }),
     ))

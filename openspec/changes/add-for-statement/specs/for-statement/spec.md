@@ -3,11 +3,12 @@
 ### Requirement: Parse for statements
 
 The parser SHALL recognize for statements of the form
-`for '(' init ';' expression ';' update ')' block`, where *init* is a
-declaration (`type name = expression`) or an assignment (`lvalue = expression`)
-without a trailing `;`, *update* is an assignment without a trailing `;`, and
-*block* is a block statement. The parser SHALL produce `ir::ast::Statement::For`
-with `init`, `cond`, `update`, and `body` fields.
+`for '(' [init] ';' [expression] ';' [update] ')' block`, where *init* (when
+present) is a declaration (`type name = expression`) or an assignment
+(`lvalue = expression`) without a trailing `;`, *update* (when present) is an
+assignment without a trailing `;`, and *block* is a block statement. The
+parser SHALL produce `ir::ast::Statement::For` with optional `init`, `cond`,
+`update`, and a mandatory `body` field.
 
 #### Scenario: Simple for with declaration init
 
@@ -41,6 +42,30 @@ with `init`, `cond`, `update`, and `body` fields.
   `for(int i=0;i<10;i=i+1){sum=sum+i;}` or
   `for  (  int  i  =  0  ;  i  <  10  ;  i  =  i  +  1  )  {  sum  =  sum  +  i  ;  }`
 - **THEN** the parser SHALL succeed.
+
+#### Scenario: All three header clauses omitted
+
+- **WHEN** the input is `for (;;) { x = x + 1; }`
+- **THEN** the parser SHALL succeed and return `Statement::For` where
+  `init == None`, `cond == None`, and `update == None`.
+
+#### Scenario: Omitted init clause
+
+- **WHEN** the input is `for (; i < 10; i = i + 1) { x = x + 1; }`
+- **THEN** the parser SHALL succeed with `init == None`, `cond == Some(_)`,
+  and `update == Some(_)`.
+
+#### Scenario: Omitted condition clause
+
+- **WHEN** the input is `for (i = 0; ; i = i + 1) { x = x + 1; }`
+- **THEN** the parser SHALL succeed with `init == Some(_)`, `cond == None`,
+  and `update == Some(_)`.
+
+#### Scenario: Omitted update clause
+
+- **WHEN** the input is `for (i = 0; i < 10; ) { x = x + 1; }`
+- **THEN** the parser SHALL succeed with `init == Some(_)`, `cond == Some(_)`,
+  and `update == None`.
 
 #### Scenario: Reject missing parentheses
 

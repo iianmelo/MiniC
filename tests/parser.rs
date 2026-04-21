@@ -481,12 +481,20 @@ fn test_simple_for() {
         ref body,
     } = result.stmt
     {
+        assert!(init.is_some());
+        assert!(cond.is_some());
+        assert!(update.is_some());
+
+        let init = init.as_ref().unwrap();
         assert!(matches!(init.stmt, Statement::Decl { ref name, ref ty, .. }
             if name == "i" && ty == &Type::Int));
         if let Statement::Decl { ref init, .. } = init.stmt {
             assert_eq!(init.exp, Expr::Literal(Literal::Int(0)));
         }
+        let cond = cond.as_ref().unwrap();
         assert!(matches!(cond.exp, Expr::Lt(_, _)));
+
+        let update = update.as_ref().unwrap();
         assert!(matches!(update.stmt, Statement::Assign { ref target, ref value }
             if matches!(target.exp, Expr::Ident(ref s) if s == "i")
             && matches!(value.exp, Expr::Add(_, _))));
@@ -509,13 +517,105 @@ fn test_for_with_assign_init() {
         ..
     } = result.stmt
     {
+        let init = init.as_ref().unwrap();
         assert!(matches!(init.stmt, Statement::Assign { ref target, ref value }
             if matches!(target.exp, Expr::Ident(ref s) if s == "i")
             && value.exp == Expr::Literal(Literal::Int(0))));
+
+        let update = update.as_ref().unwrap();
         assert!(matches!(
             update.stmt,
             Statement::Assign { .. }
         ));
+    }
+}
+
+#[test]
+fn test_for_all_clauses_omitted() {
+    let result = all_consuming(statement)("for (;;) { x = x + 1; }")
+        .unwrap()
+        .1;
+    assert!(matches!(result.stmt, Statement::For { .. }));
+    if let Statement::For {
+        ref init,
+        ref cond,
+        ref update,
+        ref body,
+    } = result.stmt
+    {
+        assert!(init.is_none());
+        assert!(cond.is_none());
+        assert!(update.is_none());
+        assert!(matches!(body.stmt, Statement::Block { ref seq } if seq.len() == 1));
+    }
+}
+
+#[test]
+fn test_for_with_missing_init_clause() {
+    let result = all_consuming(statement)("for (; i < 10; i = i + 1) { x = x + 1; }")
+        .unwrap()
+        .1;
+    assert!(matches!(result.stmt, Statement::For { .. }));
+    if let Statement::For {
+        ref init,
+        ref cond,
+        ref update,
+        ..
+    } = result.stmt
+    {
+        assert!(init.is_none());
+        assert!(matches!(cond.as_ref().map(|c| &c.exp), Some(Expr::Lt(_, _))));
+        assert!(matches!(
+            update.as_ref().map(|u| &u.stmt),
+            Some(Statement::Assign { .. })
+        ));
+    }
+}
+
+#[test]
+fn test_for_with_missing_cond_clause() {
+    let result = all_consuming(statement)("for (i = 0; ; i = i + 1) { x = x + 1; }")
+        .unwrap()
+        .1;
+    assert!(matches!(result.stmt, Statement::For { .. }));
+    if let Statement::For {
+        ref init,
+        ref cond,
+        ref update,
+        ..
+    } = result.stmt
+    {
+        assert!(matches!(
+            init.as_ref().map(|i| &i.stmt),
+            Some(Statement::Assign { .. })
+        ));
+        assert!(cond.is_none());
+        assert!(matches!(
+            update.as_ref().map(|u| &u.stmt),
+            Some(Statement::Assign { .. })
+        ));
+    }
+}
+
+#[test]
+fn test_for_with_missing_update_clause() {
+    let result = all_consuming(statement)("for (i = 0; i < 10; ) { x = x + 1; }")
+        .unwrap()
+        .1;
+    assert!(matches!(result.stmt, Statement::For { .. }));
+    if let Statement::For {
+        ref init,
+        ref cond,
+        ref update,
+        ..
+    } = result.stmt
+    {
+        assert!(matches!(
+            init.as_ref().map(|i| &i.stmt),
+            Some(Statement::Assign { .. })
+        ));
+        assert!(matches!(cond.as_ref().map(|c| &c.exp), Some(Expr::Lt(_, _))));
+        assert!(update.is_none());
     }
 }
 
@@ -556,6 +656,7 @@ fn test_for_whitespace() {
         "for  (  int  i  =  0  ;  i  <  10  ;  i  =  i  +  1  )  {  x  =  x  +  1  ;  }"
     )
     .is_ok());
+    assert!(statement("for  (  ;  ;  )  {  x  =  x  +  1  ;  }").is_ok());
 }
 
 #[test]
@@ -583,28 +684,6 @@ fn test_for_reject_as_identifier() {
     assert!(identifier("for").is_err());
 }
 
-// Empty clauses are explicitly out of scope (see design.md). The parser MUST
-// reject any form where `init`, `cond`, or `update` is absent.
-#[test]
-fn test_invalid_for_all_empty_clauses() {
-    assert!(statement("for (;;) { x = 1; }").is_err());
-}
-
-#[test]
-fn test_invalid_for_empty_init() {
-    assert!(statement("for (; i < 10; i = i + 1) { x = 1; }").is_err());
-}
-
-#[test]
-fn test_invalid_for_empty_cond() {
-    assert!(statement("for (int i = 0; ; i = i + 1) { x = 1; }").is_err());
-}
-
-#[test]
-fn test_invalid_for_empty_update() {
-    assert!(statement("for (int i = 0; i < 10; ) { x = 1; }").is_err());
-}
-
 #[test]
 fn test_for_empty_body() {
     let result = statement("for (int i = 0; i < 10; i = i + 1) { }").unwrap().1;
@@ -621,6 +700,7 @@ fn test_for_complex_cond() {
         .1;
     assert!(matches!(result.stmt, Statement::For { .. }));
     if let Statement::For { ref cond, .. } = result.stmt {
+        let cond = cond.as_ref().unwrap();
         assert!(matches!(cond.exp, Expr::And(_, _)));
     }
 }
@@ -632,6 +712,7 @@ fn test_for_update_with_array_index() {
         .1;
     assert!(matches!(result.stmt, Statement::For { .. }));
     if let Statement::For { ref update, .. } = result.stmt {
+        let update = update.as_ref().unwrap();
         assert!(matches!(update.stmt, Statement::Assign { ref target, .. }
             if matches!(target.exp, Expr::Index { .. })));
     }
@@ -644,6 +725,7 @@ fn test_for_init_with_call() {
         .1;
     assert!(matches!(result.stmt, Statement::For { .. }));
     if let Statement::For { ref init, .. } = result.stmt {
+        let init = init.as_ref().unwrap();
         assert!(matches!(init.stmt, Statement::Decl { ref init, .. }
             if matches!(init.exp, Expr::Call { ref name, .. } if name == "f")));
     }
