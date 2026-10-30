@@ -90,6 +90,16 @@ fn test_arithmetic_int() {
 }
 
 #[test]
+fn test_integer_division_by_zero_is_runtime_error() {
+    let src = "void main() { int x = 1 / 0; print(x); }";
+    let err = run(src).expect_err("division by zero must fail");
+    assert!(
+        err.contains("division by zero"),
+        "expected a runtime error, got: {err}"
+    );
+}
+
+#[test]
 fn test_arithmetic_float_coercion() {
     let src = r#"
         float f() { return 2 + 1.5; }

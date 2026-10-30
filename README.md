@@ -1,9 +1,151 @@
 # MiniC
 
-MiniC is a small C-like programming language implemented in Rust. It is
-designed as a teaching tool: the entire pipeline — parser, type checker, and
-interpreter — is intentionally small so you can read and understand every part
-of it. A complete MiniC program looks like this:
+MiniC é uma linguagem pequena, parecida com C, escrita em Rust. Um programa é
+só uma lista de funções, e a execução começa em `void main()`. O compilador
+lê o arquivo, monta a árvore sintática, confere os tipos e, se passar, roda
+o programa num interpretador que caminha por essa árvore. Dá também para
+pedir o código de três endereços (TAC) da função `main`, na parte da
+linguagem que o gerador já traduz.
+
+O repositório é um fork de [rbonifacio/MiniC](https://github.com/rbonifacio/MiniC).
+
+## O que o repositório diz sobre a disciplina
+
+Não achei, no código nem no histórico, o código da disciplina nem o período
+letivo. Não tem "IF688", "Compiladores" como nome de cadeira, nem "2026.1".
+O que dá para apontar:
+
+- Os commits de Ian Melo estão assinados com `imm2@cin.ufpe.br`.
+- O upstream é o repositório de Rodrigo Bonifácio (`rbonifacio`).
+- `docs/09-projects01.md` sorteia o Projeto 2, o laço `for`, para o grupo de
+  Ian Medeiros Melo, Victor Mendonça Aguiar, Rafael Alves de Azevedo Silva,
+  João Victor Fellows Rabelo e Guilherme Montenegro de Albuquerque.
+- O sorteio está reproduzido em `scripts/alocacao-projetos.py`, com
+  `random.seed(20260407)`.
+- O primeiro commit é de 18/02/2026. O `for` entra em 20 e 21/04/2026. A
+  geração de TAC vai de 29/06/2026 a 01/07/2026, data do último commit em
+  `main` antes deste README.
+
+Os textos em `docs/` seguem em inglês. Vieram do repositório original e
+entram em mais detalhe na linguagem, no parser, no type checker, no
+interpretador e nos testes. O enunciado dos projetos de extensão está em
+`docs/09-projects01.md`. Os slides de geração de código estão em
+`docs/tac_rules.tex` (título: "Code Generation", "From Annotated AST to
+Three Address Code").
+
+## Como um arquivo chega a rodar
+
+Não existe um lexer separado. O parser em `src/parser/` usa a biblioteca
+[nom](https://docs.rs/nom) (versão 7.1.3, travada no `Cargo.lock`) e lê o
+texto direto. A função de entrada é `program`, em `src/parser/program.rs`.
+Ela devolve uma AST em que o campo `ty` de cada nó ainda é `()`: o parser
+não calcula tipo.
+
+O type checker (`semantic::type_check`, em `src/semantic/`) anda nessa
+árvore. Ele exige `void main()` sem parâmetros, variável declarada antes do
+uso, chamada com a aridade certa, `return` compatível com o tipo da função,
+e condição booleana em `if`, `while` e `for`. Se aceitar, devolve a mesma
+árvore com um `Type` em cada nó. O interpretador só recebe essa versão
+checada. O tipo do Rust não deixa executar a AST crua do parser.
+
+O interpretador (`src/interpreter/`) é um tree walker. Cada expressão vira
+um valor, cada comando é executado, e um `return` sobe até quem chamou a
+função. Função do usuário e função da biblioteca padrão ficam no mesmo
+ambiente das variáveis. A biblioteca, em `src/stdlib/`, registra `print`,
+`readInt`, `readFloat`, `readString`, `sqrt` e `pow`.
+
+`mini_c --tac` chama `translate_program` (`src/codegen/tac_code_gen.rs`) e
+imprime o TAC da `main`. Hoje isso cobre declaração, atribuição a variável,
+chamada, `if` com `else`, `for`, e algumas expressões: literal, nome, `+`,
+`!`, `and`, `or` e condição relacional. `while`, `return`, `if` sem `else`,
+atribuição em posição de array e o resto das operações caem num `todo!()`.
+O processo aborta com exit 101. O programa pode ser válido; o gerador é que
+ainda não traduz aquele trecho.
+
+O parser de programa usa `many0` e para no primeiro pedaço que não é uma
+declaração de função, sem erro de sintaxe. O resto do arquivo é ignorado.
+Se o `main` não chegou a ser lido, o type checker diz
+`program must have a main function`. É o que `tests/cli/check.test` espera
+para `tests/fixtures/invalid_syntax.minic`.
+
+Comando simples termina com `;`. O corpo de `if`, `while` e `for` tem que
+ser um bloco entre chaves. O `for` é o de três partes, e qualquer uma delas
+pode faltar:
+
+```c
+for (int i = 0; i < 10; i = i + 1) {
+  sum = sum + i;
+}
+```
+
+## Como rodar
+
+Conferido em Linux no dia 30/10/2026, com o stable do Rust de então:
+
+```text
+rustc 1.99.1 (58cf8f9c3 2026-10-13)
+cargo 1.99.1 (5f94df478 2026-08-27)
+```
+
+Na primeira compilação o Cargo baixa da rede o que o `Cargo.lock` fixa:
+`nom` 7.1.3, `memchr` 2.8.0 e `minimal-lexical` 0.2.1. Da raiz do
+repositório:
+
+```bash
+cargo build
+cargo test
+```
+
+`cargo test` passou 205 testes. Um doctest em `src/interpreter/value.rs`
+fica de fora de propósito (`ignore`): ele só mostra a assinatura de um
+ponteiro de função, não é um teste executável.
+
+Os arquivos `tests/cli/*.test` são do shelltestrunner, um programa em
+Haskell. Ele não vem com o Rust, e aqui não estava instalado. `cargo test`
+não lê esses arquivos. Os mesmos casos estão reproduzidos abaixo, chamando
+o binário.
+
+O pacote se chama `mini_c`. O executável é `target/debug/mini_c`.
+
+```bash
+./target/debug/mini_c --run tests/fixtures/interpreter_hello.minic
+./target/debug/mini_c --run examples/fatorial.minic
+./target/debug/mini_c --run examples/soma.minic
+./target/debug/mini_c --check tests/fixtures/interpreter_hello.minic
+./target/debug/mini_c --check tests/fixtures/cli_type_mismatch.minic
+./target/debug/mini_c --tac tests/fixtures/tac_simple.minic
+./target/debug/mini_c --tac examples/if_else.minic
+cargo run --quiet --example dump_ast -- tests/fixtures/tac_simple.minic
+```
+
+`dump_ast` não faz parte do compilador. É um exemplo que imprime a AST do
+parser com o formato `Debug` do Rust.
+
+Saída do processo: 0 quando deu certo; 1 para erro de uso, de leitura, de
+parse, de tipo ou de execução; 101 quando o `--tac` esbarra num `todo!()`.
+
+## Exemplos
+
+Saídas copiadas da execução destes comandos, depois de `cargo build`.
+
+`tests/fixtures/interpreter_hello.minic`:
+
+```c
+void main() {
+    print(42);
+    print(true);
+    print("hello");
+}
+```
+
+```text
+$ ./target/debug/mini_c --run tests/fixtures/interpreter_hello.minic
+42
+true
+hello
+```
+
+`examples/fatorial.minic` calcula 10!:
 
 ```c
 int factorial(int n) {
@@ -12,267 +154,166 @@ int factorial(int n) {
 }
 
 void main() {
-  int result = factorial(10);
-  print(result);
+  print(factorial(10));
 }
 ```
 
----
-
-## Quick Start
-
-```bash
-cargo build          # compile the project
-cargo test           # run the Rust library tests
-shelltest tests/cli/ # run the CLI tests (requires cargo build first)
+```text
+$ ./target/debug/mini_c --run examples/fatorial.minic
+3628800
 ```
 
----
+`examples/soma.minic` soma `0 + 1 + ... + 9` com `for`:
 
-## Nix Development Environment
-
-This project ships a [Nix flake](https://nixos.wiki/wiki/Flakes) that pins
-every tool to a reproducible version. If you have Nix installed you never need
-to manage Rust, Clippy, or shelltestrunner yourself — the flake does it for
-you.
-
-### What is Nix?
-
-Nix is a package manager (and optionally a full OS) built around one idea:
-every package is a pure function of its inputs. The same inputs always produce
-the same output, on any machine. A *flake* is a self-contained Nix project that
-declares its own dependencies in `flake.nix` and locks them to exact hashes in
-`flake.lock`, giving you fully reproducible builds.
-
-A `devShell` is a temporary shell that provides a curated set of tools without
-touching your normal environment. When you exit the shell those tools disappear.
-
-### Prerequisites
-
-1. [Install Nix](https://nixos.org/download) (single-user or multi-user).
-2. Enable flakes and the `nix-command` experimental feature. Add the following
-   to `~/.config/nix/nix.conf` (or `/etc/nix/nix.conf`):
-
-   ```
-   experimental-features = nix-command flakes
-   ```
-
-3. *(Optional but recommended)* Install
-   [`direnv`](https://direnv.net/) and
-   [`nix-direnv`](https://github.com/nix-community/nix-direnv).
-   The `.envrc` file at the root of this repo will then activate the dev shell
-   automatically whenever you `cd` into the project directory.
-
-### Entering the dev shell
-
-```bash
-nix develop          # enter the shell manually
+```text
+$ ./target/debug/mini_c --run examples/soma.minic
+45
 ```
 
-Or, if you use direnv:
+`tests/fixtures/interpreter_array.minic` troca o elemento do meio de um
+array e imprime os três valores:
 
-```bash
-direnv allow         # run once; the shell activates on every cd after that
+```text
+$ ./target/debug/mini_c --run tests/fixtures/interpreter_array.minic
+10
+99
+30
 ```
 
-The dev shell provides:
+`--check` para no type checker. Programa aceito:
 
-| Tool | Purpose |
-|------|---------|
-| `cargo` / `rustc` | Compile and run Rust code |
-| `rustfmt` | Auto-format source files |
-| `clippy` | Lint Rust code |
-| `rust-analyzer` | LSP backend for editors |
-| `shelltest` | Run the CLI test suite |
-
-### Building and testing inside the dev shell
-
-Once inside `nix develop` (or with direnv active), the standard workflow is:
-
-```bash
-# 1. Compile
-cargo build
-
-# 2. Run unit and integration tests
-cargo test
-
-# 3. Run the CLI (shelltestrunner) tests
-#    These require the binary to be built first (step 1).
-shelltest tests/cli/
-
-# 4. Check formatting
-cargo fmt --check
-
-# 5. Run the linter
-cargo clippy -- -D warnings
+```text
+$ ./target/debug/mini_c --check tests/fixtures/interpreter_hello.minic
+'tests/fixtures/interpreter_hello.minic' is well-typed.
 ```
 
-All commands above use the exact tool versions pinned in `flake.lock`, so
-results are identical regardless of what is installed on the host system.
+`tests/fixtures/cli_type_mismatch.minic` declara `int x = "hello";`. O
+parser aceita. O type checker recusa, na stderr, e o processo sai com 1:
 
-The binary accepts two commands:
-
-```
-minic --check <file.minic>   # parse + type-check only
-minic --run   <file.minic>   # parse + type-check + interpret
-```
-
----
-
-## CLI Usage
-
-### Running a valid program
-
-Save the following as `hello.minic`:
-
-```c
-void main() {
-  str name = "Alice";
-  print(name)
-}
-```
-
-```bash
-$ minic --run hello.minic
-Alice
-```
-
-### Checking a program without running it
-
-`--check` stops after the type checker. Useful for validating a program before
-committing to run it:
-
-```bash
-$ minic --check hello.minic
-'hello.minic' is well-typed.
-```
-
-### Malformed programs
-
-The MiniC parser is lenient by design: it uses a `many0` combinator that
-collects as many valid function declarations as it can and stops silently on
-anything it cannot recognise. This means most malformed programs do not produce
-a parse error — they produce an empty (or partial) function list, and the type
-checker then reports the problem.
-
-**Using an unknown keyword instead of a type:**
-
-```c
-def greet(str name) {
-  print(name)
-}
-```
-
-The parser skips the unrecognised `def` line and finds no functions. The type
-checker then rejects the result:
-
-```bash
-$ minic --check bad_keyword.minic
-Type error: program must have a main function
-```
-
-**Assigning the wrong type to a variable:**
-
-```c
-void main() {
-  int x = "hello"
-}
-```
-
-This parses successfully but is rejected by the type checker:
-
-```bash
-$ minic --check type_mismatch.minic
+```text
 Type error: declaration of x: expected Int, got Str
 ```
 
-### Type errors
+`examples/divzero.minic` é `int x = 1 / 0;`. Isso é inteiro dividido por
+zero, então não chega a imprimir `x`. A stderr fica:
 
-Type errors are caught after parsing, before any code runs.
+```text
+RuntimeError: division by zero
+```
 
-**Assigning a string to an int variable:**
+TAC de `tests/fixtures/tac_simple.minic` (`int x = 1; x = x + 2;`):
 
-```c
-void main() {
-  int x = "hello"
+```text
+$ ./target/debug/mini_c --tac tests/fixtures/tac_simple.minic
+main
+x = 1
+temp1 = x + 2
+x = temp1
+```
+
+TAC de `examples/if_else.minic`:
+
+```text
+main
+x = 1
+if x > 0 goto Label1:
+goto Label2:
+Label1:
+x = 2
+goto Label3:
+Label2:
+x = 3
+Label3:
+```
+
+A árvore do parser para o mesmo `tac_simple.minic`, via
+`cargo run --quiet --example dump_ast -- tests/fixtures/tac_simple.minic`:
+
+```text
+Program {
+    functions: [
+        FunDecl {
+            name: "main",
+            params: [],
+            return_type: Unit,
+            body: StatementD {
+                stmt: Block {
+                    seq: [
+                        StatementD {
+                            stmt: Decl {
+                                name: "x",
+                                ty: Int,
+                                init: ExprD {
+                                    exp: Literal(
+                                        Int(
+                                            1,
+                                        ),
+                                    ),
+                                    ty: (),
+                                },
+                            },
+                            ty: (),
+                        },
+                        StatementD {
+                            stmt: Assign {
+                                target: ExprD {
+                                    exp: Ident(
+                                        "x",
+                                    ),
+                                    ty: (),
+                                },
+                                value: ExprD {
+                                    exp: Add(
+                                        ExprD {
+                                            exp: Ident(
+                                                "x",
+                                            ),
+                                            ty: (),
+                                        },
+                                        ExprD {
+                                            exp: Literal(
+                                                Int(
+                                                    2,
+                                                ),
+                                            ),
+                                            ty: (),
+                                        },
+                                    ),
+                                    ty: (),
+                                },
+                            },
+                            ty: (),
+                        },
+                    ],
+                },
+                ty: (),
+            },
+        },
+    ],
 }
 ```
 
-```bash
-$ minic --check type_mismatch.minic
-Type error: declaration of x: expected Int, got Str
-```
+O `()` em `ty` é de propósito: essa árvore ainda não passou pelo type checker.
 
-**Calling a function with the wrong argument type:**
+Os arquivos em `docs/prints/` são o terminal, na mesma máquina, rodando estes comandos:
 
-```c
-int double(int n) {
-  return n * 2
-}
+- `01-testes-interpreter.png`: `cargo test --offline --color=never --test interpreter`, com o nome dos 34 testes.
+- `02-testes.png`: `cargo test --offline --color=never --quiet`, o resumo de cada suíte (205 testes, 1 doctest ignorado).
+- `03-exemplos.png`: hello, fatorial, soma com `for` e o array.
+- `04-tipos.png`: `--check` aceito, erro de tipo, divisão por zero e o `invalid_syntax.minic`.
+- `05-tac.png`: TAC da atribuição, do `if`/`else` e do `for`.
+- `06-ast.png`: a AST de `tac_simple.minic`.
 
-void main() {
-  int result = double("hello")
-}
-```
+## Onde está cada parte
 
-```bash
-$ minic --check wrong_arg.minic
-Type error: argument 1 to double: expected Int, got Str
-```
-
-**Using a boolean where an integer is expected:**
-
-```c
-void main() {
-  int x = 10;
-  int y = x + true
-}
-```
-
-```bash
-$ minic --check bool_in_arithmetic.minic
-Type error: arithmetic operands must be Int or Float
-```
-
-### Exit codes
-
-| Situation | Exit code |
-|-----------|-----------|
-| Success | `0` |
-| Parse error, type error, or runtime error | `1` |
-| Wrong arguments or missing file | `1` |
-
----
-
-## Documentation
-
-Read the documents in order for a complete picture of the project, or jump
-directly to the topic you need.
-
-| # | File | What you will learn |
-|---|------|---------------------|
-| 1 | [Language reference](docs/01-language.md) | What you can write in MiniC: types, statements, operators |
-| 2 | [Pipeline overview](docs/02-pipeline.md) | How source code travels from text to execution |
-| 3 | [The AST](docs/03-ast.md) | How a MiniC program is represented in memory |
-| 4 | [The parser](docs/04-parser.md) | How source text is turned into an AST |
-| 5 | [The type checker](docs/05-type-checker.md) | How type errors are caught before running |
-| 6 | [The interpreter](docs/06-interpreter.md) | How a type-checked program is executed |
-| 7 | [The standard library](docs/07-stdlib.md) | Built-in functions and how to add new ones |
-| 8 | [Testing](docs/08-testing.md) | How the test suite is organised and how to add tests |
-
----
-
-## Project Layout
-
-```
-src/
-├── ir/           # AST node definitions
-├── parser/       # Source text → unchecked AST
-├── semantic/     # Type checker: unchecked AST → checked AST
-├── environment/  # Shared symbol table used by type checker and interpreter
-├── interpreter/  # Tree-walking interpreter
-└── stdlib/       # Built-in functions (print, sqrt, pow, …)
-
-tests/            # Integration tests (all tests live here)
-docs/             # This documentation
+```text
+src/parser/       texto -> AST sem tipos
+src/semantic/     type checker
+src/interpreter/  execução
+src/codegen/      AST checada -> TAC
+src/stdlib/       print, leitura e math
+src/ir/           nós da AST e do TAC
+src/environment/  tabela de símbolos
+examples/         programas .minic e o dump_ast
+tests/            testes de integração e fixtures
 ```
