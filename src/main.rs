@@ -8,9 +8,9 @@ use mini_c::{
 };
 
 fn usage() -> ! {
-    eprintln!("Usage: minic --check <file.minic>");
-    eprintln!("       minic --run   <file.minic>");
-    eprintln!("       minic --tac   <file.minic>");
+    eprintln!("Usage: mini_c --check <file.minic>");
+    eprintln!("       mini_c --run   <file.minic>");
+    eprintln!("       mini_c --tac   <file.minic>");
     process::exit(1);
 }
 

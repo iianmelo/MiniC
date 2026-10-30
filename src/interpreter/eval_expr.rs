@@ -67,7 +67,16 @@ pub fn eval_expr(expr: &CheckedExpr, env: &mut Environment<Value>) -> Result<Val
         Expr::Add(l, r) => numeric_binop(eval_expr(l, env)?, eval_expr(r, env)?, |a, b| a + b, |a, b| a + b),
         Expr::Sub(l, r) => numeric_binop(eval_expr(l, env)?, eval_expr(r, env)?, |a, b| a - b, |a, b| a - b),
         Expr::Mul(l, r) => numeric_binop(eval_expr(l, env)?, eval_expr(r, env)?, |a, b| a * b, |a, b| a * b),
-        Expr::Div(l, r) => numeric_binop(eval_expr(l, env)?, eval_expr(r, env)?, |a, b| a / b, |a, b| a / b),
+        Expr::Div(l, r) => {
+            let lv = eval_expr(l, env)?;
+            let rv = eval_expr(r, env)?;
+            // Integer division by zero panics in Rust (debug and release).
+            // Report it as a MiniC runtime error instead of aborting.
+            if matches!((&lv, &rv), (Value::Int(_), Value::Int(0))) {
+                return Err(RuntimeError::new("division by zero"));
+            }
+            numeric_binop(lv, rv, |a, b| a / b, |a, b| a / b)
+        }
 
         Expr::Lt(l, r) => numeric_cmp(eval_expr(l, env)?, eval_expr(r, env)?, |a, b| a < b, |a, b| a < b),
         Expr::Le(l, r) => numeric_cmp(eval_expr(l, env)?, eval_expr(r, env)?, |a, b| a <= b, |a, b| a <= b),
